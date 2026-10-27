@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal 2D Map Studio - Kenny Adventure Level Editor</title>
+    <link rel="stylesheet" href="editor.css">
+</head>
+<body>
+
+<div id="app-container">
+    <!-- Top Main Header & Toolbar -->
+    <header id="top-toolbar">
+        <div class="logo-group">
+            <span class="app-icon">🗺️</span>
+            <div>
+                <h1 class="app-title">Universal Map Studio</h1>
+                <span class="app-subtitle" id="current-project-title">Project: No Map Loaded</span>
+            </div>
+        </div>
+
+        <div class="toolbar-divider"></div>
+
+        <!-- Project Setup & File Switcher -->
+        <div class="toolbar-section">
+            <button type="button" class="btn btn-tool" id="btn-open-setup" title="Change Assets Folder or Load Another Level File">
+                ⚙️ Project Setup / Files
+            </button>
+            <span class="status-badge" id="assets-status-badge">Assets: Not Selected</span>
+            <span class="status-badge" id="map-status-badge">Map: Not Loaded</span>
+        </div>
+
+        <div class="toolbar-spacer"></div>
+
+        <!-- Actions & History -->
+        <div class="toolbar-section">
+            <button type="button" class="btn btn-icon" id="btn-undo" title="Undo (Ctrl+Z)" disabled>↶</button>
+            <button type="button" class="btn btn-icon" id="btn-redo" title="Redo (Ctrl+Y)" disabled>↷</button>
+
+            <button type="button" class="btn btn-secondary" id="btn-toggle-code" title="View / Edit Raw ASCII Array">
+                📜 Map Code
+            </button>
+
+            <button type="button" class="btn btn-tool" id="btn-copy-code" title="Copy ASCII Map Array for game.js">
+                📋 Copy Code
+            </button>
+
+            <!-- Export Dropdown -->
+            <div class="dropdown-wrapper">
+                <button type="button" class="btn btn-primary" id="btn-export-dropdown">
+                    💾 Save Map ▾
+                </button>
+                <div class="dropdown-menu" id="export-menu">
+                    <button type="button" class="dropdown-item" id="btn-export-txt">
+                        📄 Save as .txt (Raw ASCII)
+                    </button>
+                    <button type="button" class="dropdown-item" id="btn-export-js">
+                        📦 Save as .js (Game Module)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <div id="main-workspace">
+        <!-- Left Sidebar: Palette & Tools -->
+        <aside id="palette-sidebar">
+            <div class="sidebar-header">
+                <h3>Editor Tools</h3>
+            </div>
+            
+            <div class="tool-selector">
+                <button type="button" class="tool-btn active" data-tool="paint" id="tool-paint" title="Pencil / Paint Single (P)">✏️ Paint</button>
+                <button type="button" class="tool-btn" data-tool="line" id="tool-line" title="Draw Platform Row / Line (L)">📏 Line</button>
+                <button type="button" class="tool-btn" data-tool="erase" id="tool-erase" title="Eraser (E)">🧹 Erase</button>
+                <button type="button" class="tool-btn" data-tool="move" id="tool-move" title="Drag / Move Entity (M)">✋ Move</button>
+            </div>
+
+            <div class="sidebar-header" style="margin-top: 14px;">
+                <h3>Tile Palette</h3>
+                <span class="active-tile-badge" id="active-tile-preview">Active: #</span>
+            </div>
+
+            <!-- Search & Category Filters -->
+            <div class="palette-controls">
+                <div class="palette-search-box">
+                    <input type="text" id="palette-search" placeholder="🔍 Search tiles or character..." autocomplete="off">
+                    <button type="button" id="btn-clear-search" class="btn-clear-search" style="display: none;" title="Clear search">✕</button>
+                </div>
+                <div class="category-pills-bar" id="category-filter-pills">
+                    <!-- Populated dynamically: [All (xx)] [🌱 Terrain (xx)] ... -->
+                </div>
+            </div>
+
+            <!-- Palette Categories Scrollable -->
+            <div id="palette-list">
+                <!-- Dynamically populated from loaded assets -->
+            </div>
+
+            <!-- Viewport & Dimensions Control -->
+            <div class="sidebar-footer">
+                <div class="control-row">
+                    <label>Zoom:</label>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-sm" id="btn-zoom-out">-</button>
+                        <span id="zoom-text">75%</span>
+                        <button type="button" class="btn btn-sm" id="btn-zoom-in">+</button>
+                    </div>
+                </div>
+                <div class="control-row" style="margin-top: 8px;">
+                    <label><input type="checkbox" id="chk-grid" checked> Show Grid</label>
+                    <label><input type="checkbox" id="chk-coords" checked> Coords</label>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Center Workspace: Interactive Canvas Viewport -->
+        <main id="viewport-container">
+            <div id="canvas-scroll-wrapper">
+                <canvas id="editorCanvas"></canvas>
+            </div>
+
+            <!-- Floating Status Bar -->
+            <div id="editor-status-bar">
+                <div class="status-item" id="cursor-pos-indicator">Col: 0, Row: 0</div>
+                <div class="status-item" id="cell-char-indicator">Tile: Air [ . ]</div>
+                <div class="status-item" id="map-dim-indicator">Stage: 100 x 12</div>
+                <div class="status-item" id="autosave-indicator" style="color: #40d17a;">✓ Auto-saved</div>
+                <div class="status-spacer"></div>
+                <div class="status-tip">Left-Click: Paint | Right-Click: Erase | Drag entity: Move | Space+Drag: Pan</div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Collapsible Code Drawer -->
+    <div id="code-drawer">
+        <div class="drawer-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 18px;">📜</span>
+                <strong>Raw Map ASCII Array</strong>
+                <span style="font-size: 13px; color: #88a0bc;">(Bidirectional sync: paste or edit here and click Apply)</span>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button type="button" class="btn btn-sm btn-secondary" id="btn-drawer-apply">Apply to Grid</button>
+                <button type="button" class="btn btn-sm btn-secondary" id="btn-drawer-copy">Copy Code</button>
+                <button type="button" class="btn btn-sm btn-icon" id="btn-drawer-close">✕</button>
+            </div>
+        </div>
+        <textarea id="code-textarea" spellcheck="false" placeholder="Paste ASCII map array here..."></textarea>
+    </div>
+
+    <!-- STARTUP & PROJECT SETUP MODAL -->
+    <div id="setup-modal" class="modal-overlay open">
+        <div class="setup-card">
+            <div class="setup-header">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 32px;">🗺️</span>
+                    <div>
+                        <h2>Universal 2D Map Studio</h2>
+                        <p class="subtitle">Select your asset folder and level map to begin editing</p>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-icon" id="btn-close-setup" style="display: none;" title="Close without changing">✕</button>
+            </div>
+
+            <div class="setup-body">
+                <!-- STEP 1: ASSETS SELECTION -->
+                <div class="setup-section">
+                    <div class="section-title">
+                        <span class="step-num">1</span>
+                        <span>Select Assets Folder</span>
+                    </div>
+                    <p class="section-desc">Select the folder containing your 2D game sprites (.png, .jpg, .webp, .svg images). The editor will automatically scan, categorize, and assign identifiers to all assets.</p>
+                    
+                    <div class="drop-zone" id="assets-drop-zone">
+                        <input type="file" id="assets-folder-input" webkitdirectory directory multiple style="display: none;">
+                        <button type="button" class="btn btn-primary" id="btn-browse-assets">📁 Browse Assets Folder</button>
+                        <span class="drop-hint">or drop your asset directory here</span>
+                        <div class="selected-path-display" id="selected-assets-text">No folder selected yet</div>
+                    </div>
+
+                    <div id="wizard-category-chips" class="wizard-categories-list"></div>
+
+                    <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px;">
+                        <button type="button" class="btn btn-sm btn-secondary" id="btn-use-default-assets">
+                            ⚡ Quick Pick: KennyAdventureV1 Assets
+                        </button>
+                        <span style="font-size: 11px; color: #88a0bc;">(Uses repository Assets folder)</span>
+                    </div>
+                </div>
+
+                <!-- STEP 2: LEVEL MAP SELECTION -->
+                <div class="setup-section">
+                    <div class="section-title">
+                        <span class="step-num">2</span>
+                        <span>Select Level Map File</span>
+                    </div>
+                    <p class="section-desc">Choose an existing level map file, pick a preset, or start a new blank map.</p>
+
+                    <!-- Map Source Tabs -->
+                    <div class="tab-buttons">
+                        <button type="button" class="tab-btn active" data-tab="tab-file">📂 Load File (.txt / .js)</button>
+                        <button type="button" class="tab-btn" data-tab="tab-preset">🌟 Choose Level Preset</button>
+                        <button type="button" class="tab-btn" data-tab="tab-new">🆕 New Blank Stage</button>
+                        <button type="button" class="tab-btn" data-tab="tab-paste">📋 Paste Code</button>
+                    </div>
+
+                    <!-- Tab 1: File Upload -->
+                    <div class="tab-content active" id="tab-file">
+                        <div class="drop-zone" id="map-drop-zone">
+                            <input type="file" id="map-file-input" accept=".txt,.json,.js,.map" style="display: none;">
+                            <button type="button" class="btn btn-secondary" id="btn-browse-map">🗺️ Browse Map File</button>
+                            <span class="drop-hint">e.g. Games/KennyAdventureV1/Maps/Level_1_SunnyMeadow.txt</span>
+                            <div class="selected-path-display" id="selected-map-text">No map file chosen</div>
+                        </div>
+                    </div>
+
+                    <!-- Tab 2: Presets -->
+                    <div class="tab-content" id="tab-preset">
+                        <div class="form-row">
+                            <label>Choose Preset Level:</label>
+                            <select id="preset-select" class="dropdown" style="flex: 1;">
+                                <option value="level1">Level 1: Sunny Meadow (Platformer 64px - 100x12)</option>
+                                <option value="turbodrift">Turbo Drift 2D: Default Circuit (Racing 128px - 14x10)</option>
+                                <option value="level2">Level 2: Template Platformer (64px - 100x12)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Tab 3: New Blank Stage -->
+                    <div class="tab-content" id="tab-new">
+                        <div class="form-row">
+                            <label>Columns (Width):</label>
+                            <input type="number" id="new-map-cols" value="100" min="20" max="300" class="input-num">
+                            <label style="margin-left: 14px;">Rows (Height):</label>
+                            <input type="number" id="new-map-rows" value="12" min="8" max="30" class="input-num">
+                        </div>
+                    </div>
+
+                    <!-- Tab 4: Paste Code -->
+                    <div class="tab-content" id="tab-paste">
+                        <textarea id="setup-paste-textarea" rows="4" placeholder='Paste ASCII rows or array here e.g. ["#...#", "..."]' class="setup-textarea"></textarea>
+                    </div>
+                </div>
+
+                <!-- STEP 3: SETTINGS -->
+                <div class="setup-section" style="border-bottom: none;">
+                    <div class="section-title">
+                        <span class="step-num">3</span>
+                        <span>Studio Settings</span>
+                    </div>
+                    <div class="form-row">
+                        <label>Tile Size:</label>
+                        <select id="setup-tile-size" class="dropdown">
+                            <option value="128">128 x 128 px (Turbo Drift / Large)</option>
+                            <option value="64" selected>64 x 64 px (Kenney Standard / Platformer)</option>
+                            <option value="48">48 x 48 px</option>
+                            <option value="32">32 x 32 px</option>
+                        </select>
+                        <span style="margin-left: 14px; font-size: 12px; color: #88a0bc;">Standard Kenny uses 64px; Turbo Drift uses 128px.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Action Buttons -->
+            <div class="setup-footer">
+                <button type="button" class="btn btn-secondary" id="btn-resume-session" style="display: none;">
+                    ↺ Resume Previous Session
+                </button>
+                <div style="flex: 1;"></div>
+                <button type="button" class="btn btn-primary btn-large" id="btn-start-editing">
+                    🚀 Open Studio & Start Editing
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast">Map updated!</div>
+
+    <!-- Edit Tile Identifier Modal -->
+    <div id="edit-id-modal" class="modal-overlay">
+        <div class="edit-id-card">
+            <div class="edit-id-header">
+                <h4>🏷️ Customize Tile Identifier</h4>
+                <button type="button" class="btn btn-icon" id="btn-close-edit-id">✕</button>
+            </div>
+            <div class="edit-id-body">
+                <div class="edit-id-preview">
+                    <div id="edit-id-img-preview" class="palette-preview"></div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div id="edit-id-tile-name" style="font-weight: 700; font-size: 13px; color: #fff;">Grass Block</div>
+                        <div id="edit-id-tile-cat" style="font-size: 11px; color: #88a0bc; margin-top: 2px;">Category: 🌱 Terrain & Tiles</div>
+                        <div id="edit-id-tile-file" style="font-size: 10px; color: #5a738e; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">terrain_grass_block.png</div>
+                    </div>
+                </div>
+
+                <div class="edit-id-form-row">
+                    <label for="input-tile-char">Character Key (Identifier):</label>
+                    <input type="text" id="input-tile-char" maxlength="1" class="input-char-field" autocomplete="off" spellcheck="false">
+                </div>
+                <div id="edit-id-status" class="edit-id-status"></div>
+
+                <p class="edit-id-hint">
+                    This single character identifies this tile in raw ASCII arrays and exported game modules. If existing tiles on your map use this character, they will be updated automatically.
+                </p>
+            </div>
+            <div class="edit-id-footer">
+                <button type="button" class="btn btn-secondary" id="btn-cancel-edit-id">Cancel</button>
+                <button type="button" class="btn btn-primary" id="btn-save-edit-id">Apply Identifier</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="editor.js"></script>
+</body>
+</html>
